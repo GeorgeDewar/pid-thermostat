@@ -1,16 +1,20 @@
 #include <math.h>
 #include <Wire.h>
 #include "rgb_lcd.h"
+#include <PID_v1.h>
 
 // Constants
 int TEMP_SENSOR_PIN = 0;
-int B = 3975;                  //B value of the thermistor
-
-// Devices
-rgb_lcd lcd;
+int B = 3975;                  // B value of the thermistor
+double KP=2, KI=5, KD=1;       // PID tuning
 
 // State
-float setPoint = 20.0;
+double setPoint = 20.0;
+double pidInput, pidOutput;
+
+// Objects
+rgb_lcd lcd;
+PID myPID(&pidInput, &pidOutput, &setPoint, KP, KI, KD, DIRECT);
 
 void setup()
 {
@@ -20,18 +24,26 @@ void setup()
   lcd.print("Cur: ");
   lcd.setCursor(0, 1);
   lcd.print("Set: ");
+  
+  myPID.SetMode(AUTOMATIC);
+  myPID.SetOutputLimits(0, 100);
 }
 
 void loop()
 {
   float temperature = readTemperature();
-  delay(1000);
+  delay(100);
   Serial.print("Current temperature is ");
   Serial.println(temperature);
   lcd.setCursor(5, 0);
   lcd.print(temperature, 1);
   lcd.setCursor(5, 1);
   lcd.print(setPoint, 1);
+  
+  pidInput = temperature;
+  myPID.Compute();
+  lcd.setCursor(10, 1);
+  lcd.print(pidOutput, 0);
 }
 
 float readTemperature() {
