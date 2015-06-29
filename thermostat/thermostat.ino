@@ -5,6 +5,8 @@
 
 // Constants
 int TEMP_SENSOR_PIN = 0;
+int KP_ADJ_PIN = 2;
+int KI_ADJ_PIN = 6;
 int B = 3975;                  // B value of the thermistor
 
 // PID tuning
@@ -36,6 +38,9 @@ void setup() {
 void loop() {
   temperature = readTemperature();
   delay(20);
+  
+  KP = analogRead(KP_ADJ_PIN) / 10;
+  KI = (double) analogRead(KI_ADJ_PIN) / 1000;
   
   myPID.Compute();
   if(i++ % 50 == 0) updateDisplay();
