@@ -6,7 +6,11 @@
 // Constants
 int TEMP_SENSOR_PIN = 0;
 int B = 3975;                  // B value of the thermistor
-double KP=20, KI=0.2, KD=0;       // PID tuning
+
+// PID tuning
+double KP=20;    // 5 degrees out = 100% heating
+double KI=0.2;   // 12% per degree per minute
+double KD=0;     // Not yet used
 
 // State
 int i;
@@ -21,9 +25,6 @@ void setup() {
   Serial.begin(9600);  
   
   lcd.begin(16, 2);
-  lcd.print("Cur: ");
-  lcd.setCursor(0, 1);
-  lcd.print("Set: ");
   
   myPID.SetMode(AUTOMATIC);
   myPID.SetOutputLimits(0, 100);
@@ -34,7 +35,7 @@ void loop() {
   delay(20);
   
   myPID.Compute();
-  if(i++ % 5 == 0) updateDisplay();
+  if(i++ % 50 == 0) updateDisplay();
 }
 
 float readTemperature() {
@@ -45,13 +46,28 @@ float readTemperature() {
 }
 
 void updateDisplay() {
-  Serial.print("Current temperature is ");
-  Serial.println(temperature);
-  lcd.setCursor(5, 0);
+  lcd.clear();
+  lcd.print("C     S     P   ");
+  lcd.setCursor(0, 1);
+  lcd.print("P    I    D   ");
+  
+  lcd.setCursor(1, 0);
   lcd.print(temperature, 1);
-  lcd.setCursor(5, 1);
+  lcd.setCursor(7, 0);
   lcd.print(setPoint, 1);
-  lcd.setCursor(10, 1);
+  lcd.setCursor(13, 0);
   lcd.print(pidOutput, 0);
+  
+  lcd.setCursor(1, 1);
+  lcd.print(KP, 0);
+  lcd.setCursor(6, 1);
+  lcd.print(KI * 100, 0);
+  lcd.setCursor(11, 1);
+  lcd.print(KD, 0);
+}
+
+void printAt(int x, int y, int value, int length) {
+  lcd.setCursor(x, y);
+  
 }
 
