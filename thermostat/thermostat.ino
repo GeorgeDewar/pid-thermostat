@@ -20,6 +20,7 @@ int i;
 double setPoint = 20.0;
 double temperature, pidOutput;
 unsigned long windowStartTime;
+boolean heaterOn = false;
 
 // Objects
 rgb_lcd lcd;
@@ -74,6 +75,9 @@ void updateDisplay() {
   lcd.print(KI, 2);
   lcd.setCursor(11, 1);
   lcd.print(KD, 0);
+  
+  lcd.setCursor(15, 2);
+  if(heaterOn) lcd.print("H");
 }
 
 void updateOutput() {
@@ -83,6 +87,14 @@ void updateOutput() {
     windowStartTime += windowSize;
   }
   
-  if(pidOutput > (now - windowStartTime) * 100 / windowSize) digitalWrite(13,HIGH);
-  else digitalWrite(13,LOW); 
+  if(pidOutput > (now - windowStartTime) * 100 / windowSize) {
+    if(!heaterOn){
+      heaterOn = true;
+      Serial.println("ON");
+    }
+  }
+  else if(heaterOn) {
+    Serial.println("OFF");
+    heaterOn = false;
+  }
 }
