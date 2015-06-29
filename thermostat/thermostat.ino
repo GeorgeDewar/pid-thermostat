@@ -2,10 +2,15 @@
 #include <Wire.h>
 #include "rgb_lcd.h"
 
+// Constants
 int TEMP_SENSOR_PIN = 0;
 int B = 3975;                  //B value of the thermistor
 
+// Devices
 rgb_lcd lcd;
+
+// State
+float setPoint = 20.0;
 
 void setup()
 {
@@ -26,7 +31,7 @@ void loop()
   lcd.setCursor(5, 0);
   lcd.print(temperature, 1);
   lcd.setCursor(5, 1);
-  lcd.print(20.0, 1);
+  lcd.print(setPoint, 1);
 }
 
 float readTemperature() {
