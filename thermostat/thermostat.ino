@@ -2,12 +2,18 @@
 #include <Wire.h>
 #include "rgb_lcd.h"
 #include <PID_v1.h>
+#include <RCSwitch.h>
 
 // Constants
 int TEMP_SENSOR_PIN = 0;
 int KP_ADJ_PIN = 2;
 int KI_ADJ_PIN = 6;
+int RF_TX_PIN  = 2;
 int B = 3975;                  // B value of the thermistor
+
+unsigned long WATTS_CLEVER_DEVICE_ID = 0x62E650;
+unsigned char ON_CODES[3] = {0xE,0xC,0xA};
+unsigned char OFF_CODES[3] = {0x6, 0x4, 0x2};
 
 // PID tuning
 double KP=20;    // 5 degrees out = 100% heating
@@ -25,6 +31,7 @@ boolean heaterOn = false;
 // Objects
 rgb_lcd lcd;
 PID myPID(&temperature, &pidOutput, &setPoint, KP, KI, KD, DIRECT);
+RCSwitch mySwitch = RCSwitch();
 
 void setup() {
   Serial.begin(9600);  
@@ -34,6 +41,9 @@ void setup() {
   
   myPID.SetMode(AUTOMATIC);
   myPID.SetOutputLimits(0, 100);
+  
+  pinMode(RF_TX_PIN, OUTPUT);
+  mySwitch.enableTransmit(RF_TX_PIN);
 }
 
 void loop() {
@@ -44,7 +54,7 @@ void loop() {
   KI = (double) analogRead(KI_ADJ_PIN) / 1000;
   
   myPID.Compute();
-  if(i++ % 50 == 0) updateDisplay();
+  if(i++ % 25 == 0) updateDisplay();
   
   updateOutput();
 }
@@ -90,11 +100,17 @@ void updateOutput() {
   if(pidOutput > (now - windowStartTime) * 100 / windowSize) {
     if(!heaterOn){
       heaterOn = true;
-      Serial.println("ON");
+      digitalWrite(13, HIGH);
+      long code = WATTS_CLEVER_DEVICE_ID + ON_CODES[2];
+      mySwitch.send(code, 24);
+      digitalWrite(13, LOW);
     }
   }
   else if(heaterOn) {
-    Serial.println("OFF");
     heaterOn = false;
+    digitalWrite(13, HIGH);
+    long code = WATTS_CLEVER_DEVICE_ID + OFF_CODES[2];
+    mySwitch.send(code, 24);
+    digitalWrite(13, LOW);
   }
 }
