@@ -12,7 +12,9 @@ void setup()
   Serial.begin(9600);  
   
   lcd.begin(16, 2);
-  lcd.print("Room: ");
+  lcd.print("Cur: ");
+  lcd.setCursor(0, 1);
+  lcd.print("Set: ");
 }
 
 void loop()
@@ -21,8 +23,10 @@ void loop()
   delay(1000);
   Serial.print("Current temperature is ");
   Serial.println(temperature);
-  lcd.setCursor(6, 0);
-  lcd.print(temperature);
+  lcd.setCursor(5, 0);
+  lcd.print(temperature, 1);
+  lcd.setCursor(5, 1);
+  lcd.print(20.0, 1);
 }
 
 float readTemperature() {
