@@ -19,11 +19,11 @@ unsigned char OFF_CODES[3] = {0x6, 0x4, 0x2};
 double KP=20;    // 5 degrees out = 100% heating
 double KI=0.2;   // 12% per degree per minute
 double KD=0;     // Not yet used
-double windowSize = 10000;
+unsigned long windowSize = 240000; // 4 minutes (ish)
 
 // State
 int i;
-double setPoint = 20.0;
+double setPoint = 19.0;
 double temperature, pidOutput;
 unsigned long windowStartTime;
 boolean heaterOn = false;
@@ -50,13 +50,18 @@ void loop() {
   temperature = readTemperature();
   delay(20);
   
-  KP = analogRead(KP_ADJ_PIN) / 10;
-  KI = (double) analogRead(KI_ADJ_PIN) / 1000;
+  if(i % 10 == 0) {
+    KP = analogRead(KP_ADJ_PIN) / 10;
+    KI = (double) analogRead(KI_ADJ_PIN) / 1000;
+    myPID.SetTunings(KP, KI, KD);
+  }
   
   myPID.Compute();
-  if(i++ % 25 == 0) updateDisplay();
+  if(i % 25 == 0) updateDisplay();
   
   updateOutput();
+  
+  i++;
 }
 
 float readTemperature() {
@@ -67,6 +72,15 @@ float readTemperature() {
 }
 
 void updateDisplay() {
+  if(i % 500 == 0) {
+    Serial.print("T: ");
+    Serial.print(temperature);
+    Serial.print(", P: ");
+    Serial.print(pidOutput, 0);
+    Serial.print(", H: ");
+    Serial.println(heaterOn);
+  }
+  
   lcd.clear();
   lcd.print("C     S     P   ");
   lcd.setCursor(0, 1);
@@ -97,9 +111,19 @@ void updateOutput() {
     windowStartTime += windowSize;
   }
   
-  if(pidOutput > (now - windowStartTime) * 100 / windowSize) {
+//  Serial.print("Window Size: ");
+//  Serial.print(windowSize);
+//
+//  Serial.print(" Window elapsed: ");
+//  Serial.print((now - windowStartTime) * 100);
+//  
+//  Serial.print(" Div: ");
+//  Serial.println((now - windowStartTime) * 100 / windowSize);
+  
+  if(pidOutput * windowSize > ((now - windowStartTime) * 100)) {
     if(!heaterOn){
       heaterOn = true;
+      Serial.println("ON");
       digitalWrite(13, HIGH);
       long code = WATTS_CLEVER_DEVICE_ID + ON_CODES[2];
       mySwitch.send(code, 24);
@@ -108,6 +132,7 @@ void updateOutput() {
   }
   else if(heaterOn) {
     heaterOn = false;
+    Serial.println("OFF");
     digitalWrite(13, HIGH);
     long code = WATTS_CLEVER_DEVICE_ID + OFF_CODES[2];
     mySwitch.send(code, 24);
