@@ -54,7 +54,7 @@ void updateDisplay() {
   lcd.clear();
   lcd.print("C     S     P   ");
   lcd.setCursor(0, 1);
-  lcd.print("P    I    D   ");
+  lcd.print("P   I     D   ");
   
   lcd.setCursor(1, 0);
   lcd.print(temperature, 1);
@@ -65,8 +65,8 @@ void updateDisplay() {
   
   lcd.setCursor(1, 1);
   lcd.print(KP, 0);
-  lcd.setCursor(6, 1);
-  lcd.print(KI * 100, 0);
+  lcd.setCursor(5, 1);
+  lcd.print(KI, 2);
   lcd.setCursor(11, 1);
   lcd.print(KD, 0);
 }
