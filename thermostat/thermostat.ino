@@ -3,11 +3,11 @@
 #include "rgb_lcd.h"
 #include <PID_v1.h>
 #include <RCSwitch.h>
+#include <IRremote.h>
 
 // Constants
 int TEMP_SENSOR_PIN = 0;
-int KP_ADJ_PIN = 2;
-int KI_ADJ_PIN = 6;
+int IR_RX_PIN = 7;
 int RF_TX_PIN  = 2;
 int B = 3975;                  // B value of the thermistor
 
@@ -16,26 +16,30 @@ unsigned char ON_CODES[3] = {0xE,0xC,0xA};
 unsigned char OFF_CODES[3] = {0x6, 0x4, 0x2};
 
 // PID tuning
-double KP=20;    // 5 degrees out = 100% heating
-double KI=0.2;   // 12% per degree per minute
+double KP=45;    // 2.2 degrees out = 100% heating
+double KI=0.05;  // 3% per degree per minute
 double KD=0;     // Not yet used
-unsigned long windowSize = 240000; // 4 minutes (ish)
+unsigned long windowSize = 1200000; // 20 minutes (ish)
 
 // State
 int i;
 double setPoint = 19.0;
-double temperature, pidOutput;
+double temperature, pidOutput, currentWindowPidOutput = 0;
 unsigned long windowStartTime;
 boolean heaterOn = false;
+decode_results irSignal;
+int screen = 0;
 
 // Objects
 rgb_lcd lcd;
 PID myPID(&temperature, &pidOutput, &setPoint, KP, KI, KD, DIRECT);
 RCSwitch mySwitch = RCSwitch();
+IRrecv irrecv(IR_RX_PIN);
 
 void setup() {
   Serial.begin(9600);  
   lcd.begin(16, 2);
+  irrecv.enableIRIn();
   
   windowStartTime = millis();
   
@@ -47,19 +51,24 @@ void setup() {
 }
 
 void loop() {
-  temperature = readTemperature();
-  delay(20);
+  if(i % 25000 == 0) temperature = readTemperature();
+  //delay(20);
   
-  if(i % 10 == 0) {
-    KP = analogRead(KP_ADJ_PIN) / 10;
-    KI = (double) analogRead(KI_ADJ_PIN) / 1000;
-    myPID.SetTunings(KP, KI, KD);
+  if(irrecv.decode(&irSignal)){
+    Serial.println(irSignal.value, HEX);
+    if(irSignal.value == 0x219EA05F){
+      setPoint += 0.5;
+    }
+    else if(irSignal.value == 0x219E00FF){
+      setPoint -= 0.5; 
+    }
+    irrecv.resume();
   }
+     
+  if(i % 2500 == 0) myPID.Compute();
+  if(i % 5000 == 0) updateDisplay();
   
-  myPID.Compute();
-  if(i % 25 == 0) updateDisplay();
-  
-  updateOutput();
+  if(i % 25000 == 0) updateOutput();
   
   i++;
 }
@@ -72,19 +81,23 @@ float readTemperature() {
 }
 
 void updateDisplay() {
-  if(i % 500 == 0) {
-    Serial.print("T: ");
+  if(i % 200 == 0) {
+    Serial.print("");
     Serial.print(temperature);
-    Serial.print(", P: ");
+    Serial.print(", ");
     Serial.print(pidOutput, 0);
-    Serial.print(", H: ");
-    Serial.println(heaterOn);
+    Serial.print(", ");
+    Serial.print(heaterOn);
+    Serial.print(", ");
+    Serial.print(myPID.GetKp());
+    Serial.print(", ");
+    Serial.println(myPID.GetKi());
   }
   
-  lcd.clear();
+  lcd.setCursor(0, 0);
   lcd.print("C     S     P   ");
   lcd.setCursor(0, 1);
-  lcd.print("P   I     D   ");
+  lcd.print("P   I     D     ");
   
   lcd.setCursor(1, 0);
   lcd.print(temperature, 1);
@@ -100,7 +113,7 @@ void updateDisplay() {
   lcd.setCursor(11, 1);
   lcd.print(KD, 0);
   
-  lcd.setCursor(15, 2);
+  lcd.setCursor(15, 1);
   if(heaterOn) lcd.print("H");
 }
 
@@ -109,6 +122,7 @@ void updateOutput() {
   if(now - windowStartTime > windowSize) { 
     //time to shift the window
     windowStartTime += windowSize;
+    currentWindowPidOutput = pidOutput;
   }
   
 //  Serial.print("Window Size: ");
@@ -120,22 +134,32 @@ void updateOutput() {
 //  Serial.print(" Div: ");
 //  Serial.println((now - windowStartTime) * 100 / windowSize);
   
-  if(pidOutput * windowSize > ((now - windowStartTime) * 100)) {
+  if(currentWindowPidOutput * windowSize > ((now - windowStartTime) * 100)) {
     if(!heaterOn){
       heaterOn = true;
-      Serial.println("ON");
-      digitalWrite(13, HIGH);
-      long code = WATTS_CLEVER_DEVICE_ID + ON_CODES[2];
-      mySwitch.send(code, 24);
-      digitalWrite(13, LOW);
+      //Serial.println("ON");
+      setHeaterState(true);
     }
   }
   else if(heaterOn) {
     heaterOn = false;
-    Serial.println("OFF");
-    digitalWrite(13, HIGH);
-    long code = WATTS_CLEVER_DEVICE_ID + OFF_CODES[2];
-    mySwitch.send(code, 24);
-    digitalWrite(13, LOW);
+    //Serial.println("OFF");
+    setHeaterState(false);
   }
+  
+  // Every 400 cycles (about 8 seconds) refresh the heater state
+  if(i % 400 == 0) {
+    setHeaterState(heaterOn); 
+  }
+}
+
+void setHeaterState(boolean on) {
+  long code = WATTS_CLEVER_DEVICE_ID + (on ? ON_CODES[2] : OFF_CODES[2]);
+  sendCode(code);
+}
+
+void sendCode(long code) {
+  digitalWrite(13, HIGH);
+  mySwitch.send(code, 24);
+  digitalWrite(13, LOW);
 }
