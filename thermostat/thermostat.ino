@@ -95,23 +95,24 @@ void updateDisplay() {
   }
   
   lcd.setCursor(0, 0);
-  lcd.print("C     S     P   ");
+  lcd.print("Temp Set  Power");
   lcd.setCursor(0, 1);
-  lcd.print("P   I     D     ");
+  //lcd.print("P   I     D     ");
   
-  lcd.setCursor(1, 0);
+  lcd.setCursor(0, 1);
   lcd.print(temperature, 1);
-  lcd.setCursor(7, 0);
-  lcd.print(setPoint, 1);
-  lcd.setCursor(13, 0);
-  lcd.print(pidOutput, 0);
-  
-  lcd.setCursor(1, 1);
-  lcd.print(KP, 0);
   lcd.setCursor(5, 1);
-  lcd.print(KI, 2);
-  lcd.setCursor(11, 1);
-  lcd.print(KD, 0);
+  lcd.print(setPoint, 1);
+  lcd.setCursor(10, 1);
+  lcd.print(pidOutput, 0);
+  lcd.print("%");
+  
+//  lcd.setCursor(1, 1);
+//  lcd.print(KP, 0);
+//  lcd.setCursor(5, 1);
+//  lcd.print(KI, 2);
+//  lcd.setCursor(11, 1);
+//  lcd.print(KD, 0);
   
   lcd.setCursor(15, 1);
   if(heaterOn) lcd.print("H");
