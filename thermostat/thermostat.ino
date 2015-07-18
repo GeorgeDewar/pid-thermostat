@@ -12,8 +12,8 @@ int RF_TX_PIN  = 2;
 int B = 3975;                  // B value of the thermistor
 
 unsigned long WATTS_CLEVER_DEVICE_ID = 0x62E650;
-unsigned char ON_CODES[3] = {0xE,0xC,0xA};
-unsigned char OFF_CODES[3] = {0x6, 0x4, 0x2};
+unsigned char ON_CODES[3] = {0xF,0xD,0xA};
+unsigned char OFF_CODES[3] = {0x7, 0x5, 0x2};
 
 // PID tuning
 double KP=45;    // 2.2 degrees out = 100% heating
@@ -155,7 +155,7 @@ void updateOutput() {
 }
 
 void setHeaterState(boolean on) {
-  long code = WATTS_CLEVER_DEVICE_ID + (on ? ON_CODES[2] : OFF_CODES[2]);
+  long code = WATTS_CLEVER_DEVICE_ID + (on ? ON_CODES[1] : OFF_CODES[1]);
   sendCode(code);
 }
 
