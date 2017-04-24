@@ -1,15 +1,27 @@
 #include <math.h>
 #include <Wire.h>
-#include "rgb_lcd.h"
+#include <LiquidCrystal.h>
 #include <PID_v1.h>
 #include <RCSwitch.h>
-#include <IRremote.h>
+#include <EEPROM.h>
 
 // Constants
-int TEMP_SENSOR_PIN = 0;
-int IR_RX_PIN = 7;
-int RF_TX_PIN  = 2;
+int TEMP_SENSOR_PIN = 2;
+int RF_TX_PIN = 2;
+int BACKLIGHT_PIN = 10;
 int B = 3975;                  // B value of the thermistor
+
+#define btnRIGHT  0
+#define btnUP     1
+#define btnDOWN   2
+#define btnLEFT   3
+#define btnSELECT 4
+#define btnNONE   5
+
+#define MAGIC_ADDR 0
+#define MAGIC_VAL  123456789
+#define SETPOINT_ADDR 4
+#define BACKLIGHT_ADDR 8
 
 unsigned long WATTS_CLEVER_DEVICE_ID = 0x62E650;
 unsigned char ON_CODES[3] = {0xF,0xD,0xA};
@@ -27,20 +39,23 @@ double setPoint = 19.0;
 double temperature, pidOutput, currentWindowPidOutput = 0;
 unsigned long windowStartTime;
 boolean heaterOn = false;
-decode_results irSignal;
 int screen = 0;
+unsigned int backlight = 15;
+unsigned long backlightSetAt = 0;
+int buttonState = btnNONE;
 
 // Objects
-rgb_lcd lcd;
+LiquidCrystal lcd(8, 9, 4, 5, 6, 7); // fixed for keypad shield
 PID myPID(&temperature, &pidOutput, &setPoint, KP, KI, KD, DIRECT);
 RCSwitch mySwitch = RCSwitch();
-IRrecv irrecv(IR_RX_PIN);
 
 void setup() {
-  Serial.begin(9600);  
+  digitalWrite(BACKLIGHT_PIN, 15);
+
   lcd.begin(16, 2);
-  irrecv.enableIRIn();
-  
+  lcd.print("Starting...");
+
+  Serial.begin(9600);  
   windowStartTime = millis();
   
   myPID.SetMode(AUTOMATIC);
@@ -48,21 +63,81 @@ void setup() {
   
   pinMode(RF_TX_PIN, OUTPUT);
   mySwitch.enableTransmit(RF_TX_PIN);
+
+  long magic;
+  EEPROM.get(MAGIC_ADDR, magic);
+  if(magic == MAGIC_VAL){
+    EEPROM.get(SETPOINT_ADDR, setPoint);
+    EEPROM.get(BACKLIGHT_ADDR, backlight);
+  }
+
+  analogWrite(BACKLIGHT_PIN, backlight);
+}
+
+int read_LCD_buttons(){               // read the buttons
+  int adc_key_in = analogRead(0);       // read the value from the sensor 
+
+  if (adc_key_in > 1000) return btnNONE; 
+  if (adc_key_in < 50)   return btnRIGHT;  
+  if (adc_key_in < 195)  return btnUP; 
+  if (adc_key_in < 380)  return btnDOWN; 
+  if (adc_key_in < 555)  return btnLEFT; 
+  if (adc_key_in < 790)  return btnSELECT;   
+
+  return btnNONE;                // when all others fail, return this.
 }
 
 void loop() {
   if(i % 25000 == 0) temperature = readTemperature();
   //delay(20);
+
+  int lcd_key = read_LCD_buttons();
+  if(lcd_key == buttonState) lcd_key = btnNONE;
+  else buttonState = lcd_key;
   
-  if(irrecv.decode(&irSignal)){
-    Serial.println(irSignal.value, HEX);
-    if(irSignal.value == 0x219EA05F){
+  switch(lcd_key) {
+    case btnUP: {
       setPoint += 0.5;
+      saveState();
+      updateDisplay();
+      break;
     }
-    else if(irSignal.value == 0x219E00FF){
-      setPoint -= 0.5; 
+    case btnDOWN: {
+      setPoint -= 0.5;
+      saveState();
+      updateDisplay();
+      break;
     }
-    irrecv.resume();
+    case btnLEFT: {
+      if(backlight == 0) {
+        // do nothing
+      }
+      else if(backlight <= 20) {
+        backlight -= 5;
+      }
+      else {
+        backlight -= 10;
+      }
+
+      saveState();
+      updateBacklight();
+      break;
+    }
+    case btnRIGHT: {
+      if(backlight <= 15) {
+        backlight += 5;
+      }
+      else if(backlight <= 240) {
+        backlight += 10;
+      }
+      else {
+        // do nothing
+      }
+
+      saveState();
+      updateBacklight();
+      break;
+    }
   }
      
   if(i % 2500 == 0) myPID.Compute();
@@ -73,6 +148,12 @@ void loop() {
   i++;
 }
 
+void saveState() {
+  EEPROM.put(MAGIC_ADDR, MAGIC_VAL);
+  EEPROM.put(SETPOINT_ADDR, setPoint);
+  EEPROM.put(BACKLIGHT_ADDR, backlight);
+}
+
 float readTemperature() {
   int reading = analogRead(TEMP_SENSOR_PIN);
   float resistance = (float) (1023 - reading) * 10000 / reading; // get the resistance of the sensor
@@ -80,7 +161,23 @@ float readTemperature() {
   return temperature;
 }
 
+void updateBacklight() {
+  lcd.setCursor(0, 1);
+  lcd.print("BACKLIGHT ");
+  if(backlight == 0)
+    lcd.print("OFF");
+  else if(backlight == 250)
+    lcd.print("MAX");
+  else
+    lcd.print(backlight);
+  lcd.print("     ");
+  backlightSetAt = millis();
+  analogWrite(BACKLIGHT_PIN, backlight);
+}
+
 void updateDisplay() {
+  if(millis() - backlightSetAt < 2000) return; // let the backlight status stay a while
+  
   if(i % 200 == 0) {
     Serial.print("");
     Serial.print(temperature);
@@ -93,7 +190,7 @@ void updateDisplay() {
     Serial.print(", ");
     Serial.println(myPID.GetKi());
   }
-  
+
   lcd.setCursor(0, 0);
   lcd.print("Temp Set  Power");
   lcd.setCursor(0, 1);
@@ -101,11 +198,14 @@ void updateDisplay() {
   
   lcd.setCursor(0, 1);
   lcd.print(temperature, 1);
+  lcd.print(" ");
   lcd.setCursor(5, 1);
   lcd.print(setPoint, 1);
+  lcd.print(" ");
   lcd.setCursor(10, 1);
   lcd.print(pidOutput, 0);
   lcd.print("%");
+  lcd.print("  ");
   
 //  lcd.setCursor(1, 1);
 //  lcd.print(KP, 0);
@@ -115,7 +215,12 @@ void updateDisplay() {
 //  lcd.print(KD, 0);
   
   lcd.setCursor(15, 1);
-  if(heaterOn) lcd.print("H");
+  if(heaterOn) {
+    lcd.print("H");
+  }
+  else {
+    lcd.print(" ");
+  }
 }
 
 void updateOutput() {
