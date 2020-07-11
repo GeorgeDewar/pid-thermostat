@@ -85,7 +85,8 @@ void setup() {
 int read_LCD_buttons(){               // read the buttons
   int adc_key_in = analogRead(0);       // read the value from the sensor 
 
-  if (adc_key_in > 1000) return btnNONE; 
+  if (adc_key_in > 1000) return btnNONE;
+  
   if (adc_key_in < 50)   return btnRIGHT;  
   if (adc_key_in < 195)  return btnUP; 
   if (adc_key_in < 380)  return btnDOWN; 
@@ -109,7 +110,15 @@ void loop() {
   //delay(20);
 
   int lcd_key = read_LCD_buttons();
-  if(lcd_key == buttonState) lcd_key = btnNONE;
+  //Serial.print("Btn State: ");
+  //Serial.print(buttonState);
+  //Serial.print(", LCD key: ");
+  //Serial.println(lcd_key);
+  //if(lcd_key == buttonState) lcd_key = btnNONE; // action has already been performed
+  if(buttonState != btnNONE && lcd_key != btnNONE) {
+    //Serial.println("There is already a button state");
+    lcd_key = btnNONE; // don't allow transition from one button to a different one
+  }
   else buttonState = lcd_key;
   
   switch(lcd_key) {
@@ -193,7 +202,7 @@ void updateBacklight() {
 }
 
 void updateDisplay() {
-  if(millis() - backlightSetAt < 2000) return; // let the backlight status stay a while
+  if(millis() - backlightSetAt < 500) return; // let the backlight status stay a while
   
   if(i % 200 == 0) {
     Serial.print("");
