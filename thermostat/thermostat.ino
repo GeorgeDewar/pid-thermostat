@@ -1,3 +1,6 @@
+#include <DHT.h>
+#include <DHT_U.h>
+
 #include <math.h>
 #include <Wire.h>
 #include <LiquidCrystal.h>
@@ -7,7 +10,7 @@
 
 // Constants
 int TEMP_SENSOR_PIN = 2;
-int RF_TX_PIN = 2;
+int RF_TX_PIN = 3;
 int BACKLIGHT_PIN = 10;
 int B = 3975;                  // B value of the thermistor
 
@@ -23,6 +26,9 @@ int B = 3975;                  // B value of the thermistor
 #define SETPOINT_ADDR 4
 #define BACKLIGHT_ADDR 8
 
+#define DEFAULT_TEMP 19.0
+#define DEFAULT_BACKLIGHT 15
+
 unsigned long WATTS_CLEVER_DEVICE_ID = 0x62E650;
 unsigned char ON_CODES[3] = {0xF,0xD,0xA};
 unsigned char OFF_CODES[3] = {0x7, 0x5, 0x2};
@@ -35,12 +41,12 @@ unsigned long windowSize = 1200000; // 20 minutes (ish)
 
 // State
 int i;
-double setPoint = 19.0;
-double temperature, pidOutput, currentWindowPidOutput = 0;
+double setPoint = DEFAULT_TEMP;
+double temperature, humidity, pidOutput, currentWindowPidOutput = 0;
 unsigned long windowStartTime;
 boolean heaterOn = false;
 int screen = 0;
-unsigned int backlight = 15;
+unsigned int backlight = DEFAULT_BACKLIGHT;
 unsigned long backlightSetAt = 0;
 int buttonState = btnNONE;
 
@@ -48,6 +54,7 @@ int buttonState = btnNONE;
 LiquidCrystal lcd(8, 9, 4, 5, 6, 7); // fixed for keypad shield
 PID myPID(&temperature, &pidOutput, &setPoint, KP, KI, KD, DIRECT);
 RCSwitch mySwitch = RCSwitch();
+DHT dht(TEMP_SENSOR_PIN, DHT22);
 
 void setup() {
   digitalWrite(BACKLIGHT_PIN, 15);
@@ -72,6 +79,7 @@ void setup() {
   }
 
   analogWrite(BACKLIGHT_PIN, backlight);
+  dht.begin();
 }
 
 int read_LCD_buttons(){               // read the buttons
@@ -88,7 +96,16 @@ int read_LCD_buttons(){               // read the buttons
 }
 
 void loop() {
-  if(i % 25000 == 0) temperature = readTemperature();
+  if(i % 25000 == 0) {
+    float readTemperature = dht.readTemperature();
+    if(readTemperature < 35.0 && readTemperature > -10.0) {
+      temperature = readTemperature;
+    }
+    else {
+      Serial.println("Temp read error");
+    }
+    humidity = dht.readHumidity();
+  }
   //delay(20);
 
   int lcd_key = read_LCD_buttons();
@@ -138,6 +155,13 @@ void loop() {
       updateBacklight();
       break;
     }
+    case btnSELECT: {
+      setPoint = DEFAULT_TEMP;
+      backlight = DEFAULT_BACKLIGHT;
+      saveState();
+      updateBacklight();
+      updateDisplay();
+    }
   }
      
   if(i % 2500 == 0) myPID.Compute();
@@ -152,13 +176,6 @@ void saveState() {
   EEPROM.put(MAGIC_ADDR, MAGIC_VAL);
   EEPROM.put(SETPOINT_ADDR, setPoint);
   EEPROM.put(BACKLIGHT_ADDR, backlight);
-}
-
-float readTemperature() {
-  int reading = analogRead(TEMP_SENSOR_PIN);
-  float resistance = (float) (1023 - reading) * 10000 / reading; // get the resistance of the sensor
-  float temperature = 1 / (log(resistance / 10000) / B + 1 / 298.15) - 273.15; // convert to temperature
-  return temperature;
 }
 
 void updateBacklight() {
@@ -192,7 +209,7 @@ void updateDisplay() {
   }
 
   lcd.setCursor(0, 0);
-  lcd.print("Temp Set  Power");
+  lcd.print(i % 100000 == 0 ? "Temp Set  RH   " : "Temp Set  Power");
   lcd.setCursor(0, 1);
   //lcd.print("P   I     D     ");
   
@@ -203,7 +220,7 @@ void updateDisplay() {
   lcd.print(setPoint, 1);
   lcd.print(" ");
   lcd.setCursor(10, 1);
-  lcd.print(pidOutput, 0);
+  lcd.print(i % 100000 == 0 ? humidity : pidOutput, 0);
   lcd.print("%");
   lcd.print("  ");
   
@@ -260,7 +277,7 @@ void updateOutput() {
 }
 
 void setHeaterState(boolean on) {
-  long code = WATTS_CLEVER_DEVICE_ID + (on ? ON_CODES[1] : OFF_CODES[1]);
+  long code = WATTS_CLEVER_DEVICE_ID + (on ? ON_CODES[0] : OFF_CODES[0]);
   sendCode(code);
 }
 
